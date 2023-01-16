@@ -82,9 +82,9 @@ pub fn update(event: &WindowEvent)
         {
             input: KeyboardInput
             {
-                    state,
-                    virtual_keycode: Some(keycode),
-                    ..
+                state,
+                virtual_keycode: Some(keycode),
+                ..
             },
             ..
         } =>

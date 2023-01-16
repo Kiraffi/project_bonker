@@ -14,8 +14,9 @@ opt-level = 3
 
 [dependencies]
 input = { path = "libs/input" }
+renderer = { path = "libs/renderer" }
 window = { path = "libs/window" }
 
-cgmath = "0.18"
 env_logger = "0.10"
+glam = "0.22"
 winit = { version = "0.27", default-features = false }

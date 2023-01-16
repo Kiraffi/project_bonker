@@ -1,99 +1,22 @@
-use std::borrow::Cow;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
 
-async fn run<T>(event_loop: EventLoop<()>, window: Window, func: T)
+
+async fn run<T>(event_loop: EventLoop<()>, window: Window, update_func: T)
     where T: Fn(f64) + 'static
-
 {
-    let size = window.inner_size();
-    let instance = wgpu::Instance::new(wgpu::Backends::all());
-    let surface = unsafe { instance.create_surface(&window) };
-    let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions
-        {
-            power_preference: wgpu::PowerPreference::default(),
-            force_fallback_adapter: false,
-            // Request an adapter which can render to our surface
-            compatible_surface: Some(&surface),
-        })
-        .await
-        .expect("Failed to find an appropriate adapter");
+    let mut renderer = renderer::Renderer::new(&window).await;
 
-    // Create the logical device and command queue
-    let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor
-            {
-                label: None,
-                features: wgpu::Features::empty(),
-                // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
-                limits: wgpu::Limits::downlevel_webgl2_defaults()
-                    .using_resolution(adapter.limits()),
-            },
-            None,
-        )
-        .await
-        .expect("Failed to create device");
-
-    // Load the shaders from disk
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor
-    {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
-
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor
-    {
-        label: None,
-        bind_group_layouts: &[],
-        push_constant_ranges: &[],
-    });
-
-    let swapchain_format = surface.get_supported_formats(&adapter)[0];
-
-    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor
-    {
-        label: None,
-        layout: Some(&pipeline_layout),
-        vertex: wgpu::VertexState
-        {
-            module: &shader,
-            entry_point: "vs_main",
-            buffers: &[],
-        },
-        fragment: Some(wgpu::FragmentState
-        {
-            module: &shader,
-            entry_point: "fs_main",
-            targets: &[Some(swapchain_format.into())],
-        }),
-        primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
-        multiview: None,
-    });
-
-    let mut config = wgpu::SurfaceConfiguration
-    {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: swapchain_format,
-        width: size.width,
-        height: size.height,
-        present_mode: wgpu::PresentMode::Fifo,
-        alpha_mode: surface.get_supported_alpha_modes(&adapter)[0],
-    };
-
-    surface.configure(&device, &config);
     let mut now = std::time::Instant::now();
     event_loop.run(move |event, _, control_flow| {
+
         // Have the closure take ownership of the resources.
         // `event_loop.run` never returns, therefore we must do this to ensure
         // the resources are properly cleaned up.
-        let _ = (&instance, &adapter, &shader, &pipeline_layout);
+        let _ = &renderer;
 
         *control_flow = ControlFlow::Poll;
         match event
@@ -110,10 +33,7 @@ async fn run<T>(event_loop: EventLoop<()>, window: Window, func: T)
                 {
                     WindowEvent::Resized(size) =>
                     {
-                        // Reconfigure the surface with the new size
-                        config.width = size.width;
-                        config.height = size.height;
-                        surface.configure(&device, &config);
+                        renderer.resize(size);
                         // On macos the window needs to be redrawn manually after resizing
                         window.request_redraw();
                     },
@@ -123,59 +43,31 @@ async fn run<T>(event_loop: EventLoop<()>, window: Window, func: T)
             },
             Event::RedrawRequested(_) =>
             {
-                let frame = surface
-                    .get_current_texture()
-                    .expect("Failed to acquire next swap chain texture");
-                let view = frame
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
-                let mut encoder =
-                    device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-                {
-                    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor
-                    {
-                        label: None,
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment
-                        {
-                            view: &view,
-                            resolve_target: None,
-                            ops: wgpu::Operations
-                            {
-                                load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
-                                store: true,
-                            },
-                        })],
-                        depth_stencil_attachment: None,
-                    });
-                    rpass.set_pipeline(&render_pipeline);
-                    rpass.draw(0..3, 0..1);
-                }
-
-                queue.submit(Some(encoder.finish()));
-                frame.present();
-
                 let new_now = std::time::Instant::now();
                 let dur = new_now.duration_since(now);
                 let dt = dur.as_micros() as f64 / 1000_000.0;
                 now = new_now;
 
-                func(dt);
+                update_func(dt);
+
                 input::reset();
-                std::thread::sleep(std::time::Duration::from_millis(1));
-//                window.request_redraw();
+
+                renderer.update(dt);
+                renderer.render();
             },
             _ => {}
         }
+        std::thread::sleep(std::time::Duration::from_millis(1));
     });
 }
-pub fn run_window<T>(func: T) where T: Fn(f64) + 'static
+pub fn run_window<T>(update_func: T) where T: Fn(f64) + 'static
 {
     let event_loop = EventLoop::new();
     let window = winit::window::Window::new(&event_loop).unwrap();
 
     {
         // Temporarily avoid srgb formats for the swapchain on the web
-        pollster::block_on(run(event_loop, window, func));
+        pollster::block_on(run(event_loop, window, update_func));
     }
 
 }

@@ -6,9 +6,10 @@ use winit::{
 
 
 async fn run<T>(event_loop: EventLoop<()>, window: Window, update_func: T)
-    where T: Fn(f64) + 'static
+    where T: Fn(&input::Input, f64) + 'static
 {
     let mut renderer = renderer::Renderer::new(&window).await;
+    let mut input = input::Input::new();
 
     let mut now = std::time::Instant::now();
     event_loop.run(move |event, _, control_flow| {
@@ -28,7 +29,7 @@ async fn run<T>(event_loop: EventLoop<()>, window: Window, update_func: T)
                 window_id,
             } if window.id() == window_id =>
             {
-                input::update(event);
+                input.update(event);
                 match event
                 {
                     WindowEvent::Resized(size) =>
@@ -48,9 +49,9 @@ async fn run<T>(event_loop: EventLoop<()>, window: Window, update_func: T)
                 let dt = dur.as_micros() as f64 / 1000_000.0;
                 now = new_now;
 
-                update_func(dt);
+                update_func(&input, dt);
 
-                input::reset();
+                input.reset();
 
                 renderer.update(dt);
                 renderer.render();
@@ -60,7 +61,7 @@ async fn run<T>(event_loop: EventLoop<()>, window: Window, update_func: T)
         std::thread::sleep(std::time::Duration::from_millis(1));
     });
 }
-pub fn run_window<T>(update_func: T) where T: Fn(f64) + 'static
+pub fn run_window<T>(update_func: T) where T: Fn(&input::Input, f64) + 'static
 {
     let event_loop = EventLoop::new();
     let window = winit::window::Window::new(&event_loop).unwrap();

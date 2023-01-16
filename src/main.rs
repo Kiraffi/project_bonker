@@ -2,7 +2,7 @@ use winit::event::VirtualKeyCode;
 
 fn main()
 {
-    env_logger::init();
+    //env_logger::init();
     window::run_window(update);
 }
 

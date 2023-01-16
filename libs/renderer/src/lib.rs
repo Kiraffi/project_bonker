@@ -1,15 +1,26 @@
 
 use wgpu::*;
-use winit::{window::Window, dpi::PhysicalSize};
 
 
 mod triangle_system;
 
+pub struct PhysicalSize<P> {
+    pub width: P,
+    pub height: P,
+}
+
+impl<P> PhysicalSize<P> {
+    #[inline]
+    pub const fn new(width: P, height: P) -> Self {
+        PhysicalSize { width, height }
+    }
+}
 
 
 pub struct Renderer
 {
-    size: PhysicalSize<u32>,
+    width: u32,
+    height: u32,
     _instance: Instance,
     surface: Surface,
     _adapter: Adapter,
@@ -26,11 +37,11 @@ pub struct Renderer
 
 impl Renderer
 {
-    pub async fn new(window: &Window) -> Self
+    pub async fn new<W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle>
+        (window: &W, width: u32, height: u32) -> Self
     {
-        let size = window.inner_size();
         let instance = wgpu::Instance::new(wgpu::Backends::all());
-        let surface = unsafe { instance.create_surface(&window) };
+        let surface = unsafe { instance.create_surface(window) };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions
             {
@@ -64,8 +75,8 @@ impl Renderer
         {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: swapchain_format,
-            width: size.width,
-            height: size.height,
+            width: width,
+            height: height,
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: surface.get_supported_alpha_modes(&adapter)[0],
         };
@@ -76,7 +87,9 @@ impl Renderer
             triangle_system::TriangleSystem::new(&device, swapchain_format);
 
         Self {
-            size,
+            width,
+            height,
+
             _instance: instance,
             surface,
             _adapter: adapter,
@@ -113,12 +126,13 @@ impl Renderer
         frame.present();
     }
 
-    pub fn resize(&mut self, size: &PhysicalSize<u32>)
+    pub fn resize(&mut self, width: u32, height: u32)
     {
         // Reconfigure the surface with the new size
-        self.size = *size;
-        self.config.width = size.width;
-        self.config.height = size.height;
+        self.width = width;
+        self.height = height;
+        self.config.width = width;
+        self.config.height = height;
         self.surface.configure(&self.device, &self.config);
     }
 }

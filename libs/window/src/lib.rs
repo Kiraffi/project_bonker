@@ -8,7 +8,8 @@ use winit::{
 async fn run<T>(event_loop: EventLoop<()>, window: Window, update_func: T)
     where T: Fn(&input::Input, f64) + 'static
 {
-    let mut renderer = renderer::Renderer::new(&window).await;
+    let size = window.inner_size();
+    let mut renderer = renderer::Renderer::new(&window, size.width, size.height).await;
     let mut input = input::Input::new();
 
     let mut now = std::time::Instant::now();
@@ -34,7 +35,7 @@ async fn run<T>(event_loop: EventLoop<()>, window: Window, update_func: T)
                 {
                     WindowEvent::Resized(size) =>
                     {
-                        renderer.resize(size);
+                        renderer.resize(size.width, size.height);
                         // On macos the window needs to be redrawn manually after resizing
                         window.request_redraw();
                     },

@@ -2,6 +2,7 @@
 name = "project_bonker"
 version = "0.1.0"
 edition = "2021"
+resolver = "2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,13 +11,13 @@ opt-level = 1
 
 # Enable high optimizations for dependencies, but not for our code:
 [profile.dev.package."*"]
-opt-level = 3
+opt-level = 1
 
 [dependencies]
 input = { path = "libs/input" }
 renderer = { path = "libs/renderer" }
 window = { path = "libs/window" }
 
-env_logger = "0.10"
+#env_logger = "0.10"
 glam = "0.22"
-winit = { version = "0.27", default-features = false }
+winit = { version = "0.27", default-features = false, features = ["x11"] }

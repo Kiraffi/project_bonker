@@ -3,6 +3,7 @@ use wgpu::*;
 
 
 mod triangle_system;
+mod triangle_system_vertices;
 
 pub struct PhysicalSize<P> {
     pub width: P,
@@ -32,7 +33,8 @@ pub struct Renderer
     config: SurfaceConfiguration,
 
 
-    triangle_system: triangle_system::TriangleSystem
+    triangle_system: triangle_system::TriangleSystem,
+    triangle_system_vertices: triangle_system_vertices::TriangleSystem,
 }
 
 impl Renderer
@@ -85,6 +87,8 @@ impl Renderer
 
         let triangle_system =
             triangle_system::TriangleSystem::new(&device, swapchain_format);
+            let triangle_system_vertices =
+            triangle_system_vertices::TriangleSystem::new(&device, swapchain_format);
 
         Self {
             width,
@@ -100,7 +104,8 @@ impl Renderer
             _swapchain_format: swapchain_format,
             config,
 
-            triangle_system
+            triangle_system,
+            triangle_system_vertices,
         }
     }
 
@@ -121,7 +126,7 @@ impl Renderer
             self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         self.triangle_system.render(&mut encoder, &view);
-
+        self.triangle_system_vertices.render(&mut encoder, &view);
         self.queue.submit(Some(encoder.finish()));
         frame.present();
     }

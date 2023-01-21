@@ -8,6 +8,7 @@ resolver = "2"
 
 [dependencies]
 
+bytemuck = { version = "1.13", features = [ "derive" ] }
 pollster = "0.2.5"
 wgpu = { version  = "0.14" }
 #winit = { version = "0.27", default-features = false }

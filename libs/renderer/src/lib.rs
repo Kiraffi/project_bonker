@@ -42,8 +42,9 @@ impl Renderer
     pub async fn new<W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle>
         (window: &W, width: u32, height: u32) -> Self
     {
-        let instance = wgpu::Instance::new(wgpu::Backends::all());
-        let surface = unsafe { instance.create_surface(window) };
+        let instance = wgpu::Instance::default(); //new(wgpu::Backends::all());
+        let surface = unsafe { instance.create_surface(window) }
+            .unwrap();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions
             {
@@ -63,7 +64,7 @@ impl Renderer
                     label: None,
                     features: wgpu::Features::empty(),
                     // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
-                    limits: wgpu::Limits::downlevel_webgl2_defaults()
+                    limits: wgpu::Limits::downlevel_defaults() // downlevel_webgl2_defaults()
                         .using_resolution(adapter.limits()),
                 },
                 None,
@@ -71,7 +72,8 @@ impl Renderer
             .await
             .expect("Failed to create device");
 
-        let swapchain_format = surface.get_supported_formats(&adapter)[0];
+        let swapchain_capabilities = surface.get_capabilities(&adapter);
+        let swapchain_format = swapchain_capabilities.formats[0];
 
         let config = wgpu::SurfaceConfiguration
         {
@@ -80,7 +82,8 @@ impl Renderer
             width: width,
             height: height,
             present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode: surface.get_supported_alpha_modes(&adapter)[0],
+            alpha_mode: swapchain_capabilities.alpha_modes[0],
+            view_formats: vec![]
         };
 
         surface.configure(&device, &config);

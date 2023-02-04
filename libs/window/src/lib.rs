@@ -56,14 +56,15 @@ async fn run<T>(event_loop: EventLoop<()>, window: Window, update_func: T)
 
                 renderer.update(dt);
                 renderer.render();
+                //std::thread::sleep(std::time::Duration::from_millis(1));
             },
             _ => {}
         }
-        std::thread::sleep(std::time::Duration::from_millis(1));
     });
 }
 pub fn run_window<T>(update_func: T) where T: Fn(&input::Input, f64) + 'static
 {
+    env_logger::init();
     let event_loop = EventLoop::new();
     let window = winit::window::Window::new(&event_loop).unwrap();
 

@@ -4,6 +4,7 @@ use wgpu::*;
 
 mod triangle_system;
 mod triangle_system_vertices;
+mod triangle_system_camera_vertices;
 
 pub struct PhysicalSize<P> {
     pub width: P,
@@ -35,6 +36,7 @@ pub struct Renderer
 
     triangle_system: triangle_system::TriangleSystem,
     triangle_system_vertices: triangle_system_vertices::TriangleSystem,
+    triangle_system_camera_vertices: triangle_system_camera_vertices::TriangleSystem,
 }
 
 impl Renderer
@@ -90,8 +92,11 @@ impl Renderer
 
         let triangle_system =
             triangle_system::TriangleSystem::new(&device, swapchain_format);
-            let triangle_system_vertices =
+        let triangle_system_vertices =
             triangle_system_vertices::TriangleSystem::new(&device, swapchain_format);
+
+        let triangle_system_camera_vertices =
+        triangle_system_camera_vertices::TriangleSystem::new(&device, swapchain_format);
 
         Self {
             width,
@@ -109,12 +114,13 @@ impl Renderer
 
             triangle_system,
             triangle_system_vertices,
+            triangle_system_camera_vertices,
         }
     }
 
-    pub fn update(&mut self, _dt: f64)
+    pub fn update(&mut self, _dt: f64, game_state: &common::GameState)
     {
-
+        self.triangle_system_camera_vertices.update(game_state.scene.get_current_camera(), &self.queue);
     }
 
     pub fn render(&mut self)
@@ -130,6 +136,7 @@ impl Renderer
 
         self.triangle_system.render(&mut encoder, &view);
         self.triangle_system_vertices.render(&mut encoder, &view);
+        self.triangle_system_camera_vertices.render(&mut encoder, &view);
         self.queue.submit(Some(encoder.finish()));
         frame.present();
     }

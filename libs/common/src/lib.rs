@@ -51,6 +51,11 @@ impl Scene
         }
     }
 
+    pub fn resize_canvas(&mut self, width: f32, height: f32)
+    {
+        self.cameras[0].resize(width, height);
+    }
+
     pub fn get_current_camera(&self) -> &Camera
     {
         return &self.cameras[self.current_cam_index];
@@ -93,15 +98,19 @@ impl Camera
     {
         Self
         {
-            eye: glam::vec3(0.0, 1.0, -2.0),
+            eye: glam::vec3(0.0, 1.0, 2.0),
             aspect: width / height,
             fovy: 55.0,
             znear: 0.1,
             zfar: 100.0,
 
-            heading: 0.0,
+            heading: std::f32::consts::PI,
             pitch: 0.0,
         }
+    }
+    pub fn resize(&mut self, width: f32, height: f32)
+    {
+        self.aspect = width / height;
     }
 
     pub fn build_view_projection_matrix(&self) -> glam::Mat4

@@ -75,17 +75,35 @@ impl Vertex
 }
 
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.0868241, 0.49240386, 0.0, 1.0], color: [0.5, 0.0, 0.5, 1.0] }, // A
-    Vertex { position: [-0.49513406, 0.06958647, 0.0, 1.0], color: [0.5, 0.0, 0.5, 1.0] }, // B
-    Vertex { position: [-0.21918549, -0.44939706, 0.0, 1.0], color: [0.5, 0.0, 0.5, 1.0] }, // C
-    Vertex { position: [0.35966998, -0.3473291, 0.0, 1.0], color: [0.5, 0.0, 0.5, 1.0] }, // D
-    Vertex { position: [0.44147372, 0.2347359, 0.0, 1.0], color: [0.5, 0.0, 0.5, 1.0] }, // E
+    Vertex { position: [-0.5, -0.5, 0.5, 1.0], color: [0.0, 0.8, 0.8, 1.0] },
+    Vertex { position: [-0.5,  0.5, 0.5, 1.0], color: [0.8, 0.8, 0.8, 1.0] },
+    Vertex { position: [ 0.5,  0.5, 0.5, 1.0], color: [0.8, 0.8, 0.8, 1.0] },
+    Vertex { position: [ 0.5, -0.5, 0.5, 1.0], color: [0.8, 0.8, 0.8, 1.0] },
+
+    Vertex { position: [ 0.5, -0.5, -0.5, 1.0], color: [0.8, 0.8, 0.8, 1.0] },
+    Vertex { position: [ 0.5,  0.5, -0.5, 1.0], color: [0.8, 0.0, 0.8, 1.0] },
+    Vertex { position: [-0.5,  0.5, -0.5, 1.0], color: [0.8, 0.8, 0.8, 1.0] },
+    Vertex { position: [-0.5, -0.5, -0.5, 1.0], color: [0.8, 0.8, 0.8, 1.0] },
 ];
 
 const INDICES: &[u16] = &[
-    0, 1, 4,
-    1, 2, 4,
-    2, 3, 4,
+    0, 1, 2,
+    2, 0, 3,
+
+    4, 5, 6,
+    6, 4, 7,
+
+    3, 2, 5,
+    5, 4, 3,
+
+    7, 6, 1,
+    1, 0, 7,
+
+    1, 6, 5,
+    5, 2, 1,
+
+    7, 0, 3,
+    3, 4, 7,
 ];
 
 
@@ -220,7 +238,7 @@ impl TriangleSystem
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment
             {
-                view: view,
+                view,
                 resolve_target: None,
                 ops: wgpu::Operations
                 {

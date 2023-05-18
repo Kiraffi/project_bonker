@@ -1,3 +1,4 @@
+use std::f32::consts::PI;
 use winit::event::VirtualKeyCode;
 
 
@@ -89,6 +90,7 @@ impl common::System for CameraSystem
         {
             camera.heading -= rotation_speed;
         }
+        camera.pitch = camera.pitch.max(-PI * 0.499f32).min(PI * 0.499f32);
         camera.eye += movement;
     }
 }
@@ -143,6 +145,10 @@ async fn run()
                         WindowEvent::Resized(size) =>
                             {
                                 renderer.resize(size.width, size.height);
+                                game_state.scene.resize_canvas(
+                                    size.width as f32,
+                                    size.height as f32
+                                );
                                 // On macos the window needs to be redrawn manually after resizing
                                 window.request_redraw();
                             },

@@ -1,54 +1,38 @@
 use std::borrow::Cow;
+use std::num::NonZeroU32;
 
 use wgpu::{ShaderModule, PipelineLayout, RenderPipeline, TextureFormat, Device, CommandEncoder, TextureView, Texture, BindGroupLayout, BindGroup, Sampler};
 
 pub struct TriangleSystem
 {
-    shader: ShaderModule,
-    pipeline_layout: PipelineLayout,
+    _shader: ShaderModule,
+    _pipeline_layout: PipelineLayout,
     render_pipeline: RenderPipeline,
 
-    input_texture_view: TextureView,
-    texture_sampler: Sampler,
-    bind_group_layout: BindGroupLayout,
+    _input_texture_view: TextureView,
+    _texture_sampler: Sampler,
+    _bind_group_layout: BindGroupLayout,
     bind_group: BindGroup,
 }
 
 impl TriangleSystem
 {
-    pub fn new(device: &Device, textureformat: TextureFormat, input_texture: &Texture) -> Self
+    pub fn new(device: &Device, texture_format: TextureFormat, input_texture: &Texture) -> Self
     {
         // Load the shaders from disk
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor
+        let _shader = device.create_shader_module(wgpu::ShaderModuleDescriptor
         {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(
                 include_str!("../../../data/shaders/blit.wgsl"))),
         });
 
-        let input_texture_view= input_texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some(&format!("Input texture")),
-            format: Some(wgpu::TextureFormat::Rgba8Unorm),
-            base_mip_level: 0,
-            mip_level_count: Some(1),
-            ..Default::default()
-        });
-
-        let texture_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        });
 
 
 
 
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Back buffer blitter bind group"),
+        let _bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Back buffer blit bind group"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -71,10 +55,18 @@ impl TriangleSystem
             ],
         });
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor
+        let (bind_group, _input_texture_view, _texture_sampler) =
+            Self::create_bind_group(
+                &device,
+                &_bind_group_layout,
+                &input_texture
+            );
+
+
+        let _pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor
         {
             label: None,
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[&_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -82,18 +74,18 @@ impl TriangleSystem
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor
         {
             label: None,
-            layout: Some(&pipeline_layout),
+            layout: Some(&_pipeline_layout),
             vertex: wgpu::VertexState
             {
-                module: &shader,
+                module: &_shader,
                 entry_point: "vs_main",
                 buffers: &[],
             },
             fragment: Some(wgpu::FragmentState
             {
-                module: &shader,
+                module: &_shader,
                 entry_point: "fs_main",
-                targets: &[Some(textureformat.into())],
+                targets: &[Some(texture_format.into())],
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
@@ -101,44 +93,39 @@ impl TriangleSystem
             multiview: None,
         });
 
-        let bind_group = device.create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                layout: &bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&input_texture_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&texture_sampler),
-                    }
-                ],
-                label: Some("diffuse_bind_group"),
-            }
-        );
 
         Self {
-            shader,
-            pipeline_layout,
+            _shader,
+            _pipeline_layout,
             render_pipeline,
 
-            input_texture_view,
-            texture_sampler,
+            _input_texture_view,
+            _texture_sampler,
 
-            bind_group_layout,
+            _bind_group_layout,
             bind_group,
         }
     }
-
+    pub fn rebind_texture(&mut self, device: &Device, texture: &Texture)
+    {
+        let (bind_group, texture_view, sampler) =
+            Self::create_bind_group(
+                &device,
+                &self._bind_group_layout,
+                &texture
+            );
+        self.bind_group = bind_group;
+        self._input_texture_view = texture_view;
+        self._texture_sampler = sampler;
+    }
     pub fn render(&mut self, encoder: &mut CommandEncoder, view: &TextureView)
     {
-        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor
+        let mut render_pass= encoder.begin_render_pass(&wgpu::RenderPassDescriptor
         {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment
             {
-                view: view,
+                view,
                 resolve_target: None,
                 ops: wgpu::Operations
                 {
@@ -148,8 +135,52 @@ impl TriangleSystem
             })],
             depth_stencil_attachment: None,
         });
-        rpass.set_pipeline(&self.render_pipeline);
-        rpass.set_bind_group(0, &self.bind_group, &[]);
-        rpass.draw(0..3, 0..1);
+        render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.set_bind_group(0, &self.bind_group, &[]);
+        render_pass.draw(0..3, 0..1);
     }
+
+    fn create_bind_group(
+        device: &Device,
+        bind_group_layout: &BindGroupLayout,
+        input_texture: &Texture
+    ) -> (BindGroup, TextureView, Sampler)
+    {
+        let _input_texture_view = input_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some(&format!("Input texture")),
+            format: Some(input_texture.format()),
+            base_mip_level: 0,
+            mip_level_count: Some(NonZeroU32::try_from(1u32).unwrap().into()),
+            ..Default::default()
+        });
+
+        let _texture_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
+        let bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&_input_texture_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&_texture_sampler),
+                    }
+                ],
+                label: Some("diffuse_bind_group"),
+            }
+        );
+        return (bind_group, _input_texture_view, _texture_sampler);
+    }
+
 }

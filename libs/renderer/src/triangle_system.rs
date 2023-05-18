@@ -64,7 +64,7 @@ impl TriangleSystem
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment
             {
-                view: view,
+                view,
                 resolve_target: None,
                 ops: wgpu::Operations
                 {

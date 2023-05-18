@@ -37,6 +37,8 @@ pub struct Renderer
     render_target_texture: Texture,
     render_target_texture2: Texture,
 
+    render_target_texture_view: TextureView,
+
     compute_system: compute_system::TriangleSystem,
 
 
@@ -74,15 +76,41 @@ impl Renderer
             format,
             usage,
             label: None,
-            view_formats: &[], //vec![TextureFormat::Rgba8UnormSrgb, TextureFormat::Rgba8Unorm],
+            view_formats: &[], //TextureFormat::Rgba8UnormSrgb, TextureFormat::Rgba8Unorm],
         };
         return device.create_texture(&rt_desc);
     }
+    fn create_render_target_textures(
+        device: &Device,
+        width: u32,
+        height: u32
+    ) -> (Texture, Texture, TextureView)
+    {
+        let render_target_texture = Self::create_rendertarget_texture(
+            &device,
+            width,
+            height,
+            TextureFormat::Rgba8UnormSrgb,
+            TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::TEXTURE_BINDING
+        );
+        let render_target_texture2 = Self::create_rendertarget_texture(
+            &device,
+            width,
+            height,
+            TextureFormat::Rgba8Unorm,
+            TextureUsages::TEXTURE_BINDING
+                | TextureUsages::STORAGE_BINDING
+        );
 
+        let render_target_texture_view = render_target_texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        return (render_target_texture, render_target_texture2,render_target_texture_view);
+    }
     pub async fn new<W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle>
         (window: &W, width: u32, height: u32) -> Self
     {
-
 
         let instance = wgpu::Instance::default(); //new(wgpu::Backends::all());
         let surface = unsafe { instance.create_surface(window) }
@@ -132,36 +160,22 @@ impl Renderer
 
         surface.configure(&device, &config);
 
-        let render_target_texture = Self::create_rendertarget_texture(
-            &device,
-            width,
-            height,
-            TextureFormat::Rgba8UnormSrgb,
-            TextureUsages::RENDER_ATTACHMENT
-                | TextureUsages::TEXTURE_BINDING
-        );
-        let render_target_texture2 = Self::create_rendertarget_texture(
-            &device,
-            width,
-            height,
-            TextureFormat::Rgba8Unorm,
-            TextureUsages::TEXTURE_BINDING
-                | TextureUsages::STORAGE_BINDING
-        );
+        let (render_target_texture, render_target_texture2, render_target_texture_view) =
+            Self::create_render_target_textures(&device, width, height);
 
         let triangle_system =
             triangle_system::TriangleSystem::new(
                 &device,
-                TextureFormat::Rgba8UnormSrgb);
+                render_target_texture.format());
         let triangle_system_vertices =
             triangle_system_vertices::TriangleSystem::new(
                 &device,
-                TextureFormat::Rgba8UnormSrgb);
+                render_target_texture.format());
 
         let triangle_system_camera_vertices =
         triangle_system_camera_vertices::TriangleSystem::new(
             &device,
-            TextureFormat::Rgba8UnormSrgb);
+            render_target_texture.format());
 
 
         let compute_system = compute_system::TriangleSystem::new(
@@ -169,7 +183,6 @@ impl Renderer
             &render_target_texture,
             &render_target_texture2,
         );
-
 
         let blit_to_backbuffer = blit_to_backbuffer::TriangleSystem::new(
             &device,
@@ -193,6 +206,8 @@ impl Renderer
             render_target_texture,
             render_target_texture2,
 
+            render_target_texture_view,
+
             compute_system,
 
             triangle_system,
@@ -213,20 +228,18 @@ impl Renderer
         let frame = self.surface
             .get_current_texture()
             .expect("Failed to acquire next swap chain texture");
-        let view = self.render_target_texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let back_buffeer_view = frame
+        let back_buffer_view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder =
             self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        self.triangle_system.render(&mut encoder, &view);
-        self.triangle_system_vertices.render(&mut encoder, &view);
-        self.triangle_system_camera_vertices.render(&mut encoder, &view);
-        self.compute_system.render(&mut encoder, &view);
+        self.triangle_system.render(&mut encoder, &self.render_target_texture_view);
+        self.triangle_system_vertices.render(&mut encoder, &self.render_target_texture_view);
+        self.triangle_system_camera_vertices.render(&mut encoder, &self.render_target_texture_view);
+        self.compute_system.render(&mut encoder, &self.render_target_texture_view);
 
-        self.blit_to_backbuffer.render(&mut encoder, &back_buffeer_view);
+        self.blit_to_backbuffer.render(&mut encoder, &back_buffer_view);
         /*
         encoder.copy_texture_to_texture(
             wgpu::ImageCopyTexture {
@@ -254,12 +267,38 @@ impl Renderer
 
     pub fn resize(&mut self, width: u32, height: u32)
     {
+        if width == self.width && height == self.height
+        {
+            return;
+        }
+        let width = std::cmp::max(4u32, width);
+        let height = std::cmp::max(4u32, height);
         // Reconfigure the surface with the new size
         self.width = width;
         self.height = height;
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
+        //self.render_target_texture.destroy();
+        //self.render_target_texture2.destroy();
+
+        let (render_target_texture, render_target_texture2, render_target_texture_view) =
+            Self::create_render_target_textures(&self.device, width, height);
+
+
+        self.compute_system.rebind_textures(
+            &self.device,
+            &render_target_texture,
+            &render_target_texture2
+        );
+        self.blit_to_backbuffer.rebind_texture(
+            &self.device,
+            &render_target_texture2,
+        );
+
+        self.render_target_texture = render_target_texture;
+        self.render_target_texture2 = render_target_texture2;
+        self.render_target_texture_view = render_target_texture_view;
     }
 }
 

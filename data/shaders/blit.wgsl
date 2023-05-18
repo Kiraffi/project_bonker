@@ -12,6 +12,8 @@ var s_diffuse: sampler;
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput
 {
+    // No ternary operator? Make the triangle [{-1, -1}, {-1, 3}, {3, -1}] in clip space
+    // to cover whole screen {-1, -1} - {1, 1}
     let x = f32(i32(in_vertex_index & 2u) * 2 - 1);
     let y = f32(i32(in_vertex_index & 1u) * 4 - 1);
 

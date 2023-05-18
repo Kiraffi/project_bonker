@@ -46,7 +46,7 @@ impl Scene
         cameras.push(Camera::new(width, height));
         Self {
             entities: Vec::new(),
-            cameras: cameras,
+            cameras,
             current_cam_index: 0,
         }
     }
@@ -95,7 +95,7 @@ impl Camera
         {
             eye: glam::vec3(0.0, 1.0, -2.0),
             aspect: width / height,
-            fovy: 45.0,
+            fovy: 55.0,
             znear: 0.1,
             zfar: 100.0,
 

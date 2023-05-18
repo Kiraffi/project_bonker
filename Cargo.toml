@@ -21,10 +21,15 @@ renderer = { path = "libs/renderer" }
 
 env_logger =  { version = "0.10", default-features=false, features=["humantime"] }
 log = "0.4"
-pollster = "0.2.5"
+pollster = "0.3.0"
 
-glam = "0.22"
+glam = "0.24.0"
 #winit = { version = "0.28.1", default-features = false, features = ["x11"] }
-winit = { version = "0.27.5" }
+
+[target.'cfg(windows)'.dependencies]
+winit = { version = "0.28.5" }
+
+[target.'cfg(unix)'.dependencies]
+winit = { version = "0.28.5", default-features = false, features = ["x11"] }
 
 gltf = "1.0"

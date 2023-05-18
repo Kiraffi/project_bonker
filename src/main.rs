@@ -99,8 +99,9 @@ impl common::System for CameraSystem
 
 async fn run()
 {
-    let size = (800.0f32, 600.0f32);
-    let mut game_state = common::GameState::new(size.0, size.1);
+    let size = winit::dpi::PhysicalSize::new(1024, 768);
+    let mut game_state =
+        common::GameState::new(size.width as f32, size.height as f32);
 
     let mut systems: Vec<Box<dyn common::System>> = Vec::new();
 
@@ -109,11 +110,15 @@ async fn run()
 
 
     let event_loop = EventLoop::new();
-    let window = winit::window::Window::new(&event_loop).unwrap();
+    let window = winit::window::WindowBuilder::new()
+        .with_inner_size(size)
+
+        .build(&event_loop).unwrap();
 
     let size = window.inner_size();
-    let mut renderer = renderer::Renderer::new(&window, size.width, size.height).await;
-
+    println!("window size: {}, {}", size.width, size.height);
+    let mut renderer =
+        renderer::Renderer::new(&window, size.width, size.height).await;
     let mut now = std::time::Instant::now();
     event_loop.run(move |event, _, control_flow| {
 
@@ -131,44 +136,44 @@ async fn run()
                 ref event,
                 window_id,
             } if window.id() == window_id =>
-            {
-                game_state.input.update(event);
-                match event
                 {
-                    WindowEvent::Resized(size) =>
+                    game_state.input.update(event);
+                    match event
                     {
-                        renderer.resize(size.width, size.height);
-                        // On macos the window needs to be redrawn manually after resizing
-                        window.request_redraw();
-                    },
-                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                    _ => {}
-                }
-            },
+                        WindowEvent::Resized(size) =>
+                            {
+                                renderer.resize(size.width, size.height);
+                                // On macos the window needs to be redrawn manually after resizing
+                                window.request_redraw();
+                            },
+                        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                        _ => {}
+                    }
+                },
             Event::RedrawRequested(_) =>
-            {
-                let new_now = std::time::Instant::now();
-                let dur = new_now.duration_since(now);
-                let dt = dur.as_micros() as f64 / 1000_000.0;
-                now = new_now;
-
-                //update_func(&mut game_state, &input, dt);
-
-                game_state.input.reset();
-
-                for system in &mut systems
                 {
-                    system.as_mut().update(dt, &mut game_state);
-                }
-                for system in &mut systems
-                {
-                    system.as_mut().post_update(dt, &mut game_state);
-                }
+                    let new_now = std::time::Instant::now();
+                    let dur = new_now.duration_since(now);
+                    let dt = dur.as_micros() as f64 / 1000_000.0;
+                    now = new_now;
 
-                renderer.update(dt, &game_state);
-                renderer.render();
-                //std::thread::sleep(std::time::Duration::from_millis(1));
-            },
+                    //update_func(&mut game_state, &input, dt);
+
+                    game_state.input.reset();
+
+                    for system in &mut systems
+                    {
+                        system.as_mut().update(dt, &mut game_state);
+                    }
+                    for system in &mut systems
+                    {
+                        system.as_mut().post_update(dt, &mut game_state);
+                    }
+
+                    renderer.update(dt, &game_state);
+                    renderer.render();
+                    //std::thread::sleep(std::time::Duration::from_millis(1));
+                },
             _ => {}
         }
     });

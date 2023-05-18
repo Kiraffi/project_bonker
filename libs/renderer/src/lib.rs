@@ -1,7 +1,8 @@
 
 use wgpu::*;
 
-
+mod blit_to_backbuffer;
+mod compute_system;
 mod triangle_system;
 mod triangle_system_vertices;
 mod triangle_system_camera_vertices;
@@ -33,17 +34,56 @@ pub struct Renderer
     _swapchain_format: TextureFormat,
     config: SurfaceConfiguration,
 
+    render_target_texture: Texture,
+    render_target_texture2: Texture,
+
+    compute_system: compute_system::TriangleSystem,
+
 
     triangle_system: triangle_system::TriangleSystem,
     triangle_system_vertices: triangle_system_vertices::TriangleSystem,
     triangle_system_camera_vertices: triangle_system_camera_vertices::TriangleSystem,
+
+    blit_to_backbuffer: blit_to_backbuffer::TriangleSystem,
 }
 
 impl Renderer
 {
+    fn create_rendertarget_texture(
+        device: &Device,
+        w: u32,
+        h: u32,
+        format: wgpu::TextureFormat,
+        usage: wgpu::TextureUsages,
+    ) -> wgpu::Texture
+    {
+        //if w % 64 != 0
+        {
+            //return Err("Render target texture needs to be multiple of 64 pixels.")
+        }
+
+        let rt_desc = wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage,
+            label: None,
+            view_formats: &[], //vec![TextureFormat::Rgba8UnormSrgb, TextureFormat::Rgba8Unorm],
+        };
+        return device.create_texture(&rt_desc);
+    }
+
     pub async fn new<W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle>
         (window: &W, width: u32, height: u32) -> Self
     {
+
+
         let instance = wgpu::Instance::default(); //new(wgpu::Backends::all());
         let surface = unsafe { instance.create_surface(window) }
             .unwrap();
@@ -81,23 +121,61 @@ impl Renderer
         {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: swapchain_format,
-            width: width,
-            height: height,
+            width,
+            height,
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: swapchain_capabilities.alpha_modes[0],
             view_formats: vec![]
         };
 
+        //format: wgpu::TextureFormat::Rgba8UnormSrgb,
+
         surface.configure(&device, &config);
 
+        let render_target_texture = Self::create_rendertarget_texture(
+            &device,
+            width,
+            height,
+            TextureFormat::Rgba8UnormSrgb,
+            TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::TEXTURE_BINDING
+        );
+        let render_target_texture2 = Self::create_rendertarget_texture(
+            &device,
+            width,
+            height,
+            TextureFormat::Rgba8Unorm,
+            TextureUsages::TEXTURE_BINDING
+                | TextureUsages::STORAGE_BINDING
+        );
+
         let triangle_system =
-            triangle_system::TriangleSystem::new(&device, swapchain_format);
+            triangle_system::TriangleSystem::new(
+                &device,
+                TextureFormat::Rgba8UnormSrgb);
         let triangle_system_vertices =
-            triangle_system_vertices::TriangleSystem::new(&device, swapchain_format);
+            triangle_system_vertices::TriangleSystem::new(
+                &device,
+                TextureFormat::Rgba8UnormSrgb);
 
         let triangle_system_camera_vertices =
-        triangle_system_camera_vertices::TriangleSystem::new(&device, swapchain_format);
+        triangle_system_camera_vertices::TriangleSystem::new(
+            &device,
+            TextureFormat::Rgba8UnormSrgb);
 
+
+        let compute_system = compute_system::TriangleSystem::new(
+            &device,
+            &render_target_texture,
+            &render_target_texture2,
+        );
+
+
+        let blit_to_backbuffer = blit_to_backbuffer::TriangleSystem::new(
+            &device,
+            swapchain_format,
+            &render_target_texture2
+        );
         Self {
             width,
             height,
@@ -112,9 +190,16 @@ impl Renderer
             _swapchain_format: swapchain_format,
             config,
 
+            render_target_texture,
+            render_target_texture2,
+
+            compute_system,
+
             triangle_system,
             triangle_system_vertices,
             triangle_system_camera_vertices,
+
+            blit_to_backbuffer,
         }
     }
 
@@ -128,7 +213,9 @@ impl Renderer
         let frame = self.surface
             .get_current_texture()
             .expect("Failed to acquire next swap chain texture");
-        let view = frame
+        let view = self.render_target_texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let back_buffeer_view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder =
@@ -137,7 +224,31 @@ impl Renderer
         self.triangle_system.render(&mut encoder, &view);
         self.triangle_system_vertices.render(&mut encoder, &view);
         self.triangle_system_camera_vertices.render(&mut encoder, &view);
+        self.compute_system.render(&mut encoder, &view);
+
+        self.blit_to_backbuffer.render(&mut encoder, &back_buffeer_view);
+        /*
+        encoder.copy_texture_to_texture(
+            wgpu::ImageCopyTexture {
+                texture: &self.render_target_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: TextureAspect::All
+            },
+            wgpu::ImageCopyTexture {
+                texture: &frame.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: TextureAspect::All
+            },
+            self.render_target_texture.size()
+        );
+        */
         self.queue.submit(Some(encoder.finish()));
+
+
+
+
         frame.present();
     }
 

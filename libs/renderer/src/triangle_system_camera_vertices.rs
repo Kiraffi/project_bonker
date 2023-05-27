@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use wgpu::util::DeviceExt;
 
-use wgpu::{ShaderModule, PipelineLayout, RenderPipeline, TextureFormat, Device, CommandEncoder, TextureView};
+use wgpu::{ShaderModule, PipelineLayout, RenderPipeline, TextureFormat, Device, CommandEncoder, TextureView, Texture};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -150,7 +150,7 @@ const INDICES: &[u16] = &[
 
 impl TriangleSystem
 {
-    pub fn new(device: &Device, textureformat: TextureFormat) -> Self
+    pub fn new(device: &Device, textureformat: TextureFormat, depth_texture_format: TextureFormat) -> Self
     {
 
         let camera_uniform = CameraUniform::new();
@@ -225,7 +225,13 @@ impl TriangleSystem
                 targets: &[Some(textureformat.into())],
             }),
             primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
+            depth_stencil: Some( wgpu::DepthStencilState{
+                format: depth_texture_format,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
         });
@@ -271,7 +277,7 @@ impl TriangleSystem
             bytemuck::cast_slice(&[self.camera_uniform]));
 
     }
-    pub fn render(&mut self, encoder: &mut CommandEncoder, view: &TextureView)
+    pub fn render(&mut self, encoder: &mut CommandEncoder, view: &TextureView, depth_view: &TextureView)
     {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor
         {
@@ -286,7 +292,14 @@ impl TriangleSystem
                     store: true,
                 },
             })],
-            depth_stencil_attachment: None,
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &depth_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: true,
+                }),
+                stencil_ops: None,
+            }),
         });
         rpass.set_pipeline(&self.render_pipeline);
         rpass.set_bind_group(0, &self.camera_bind_group, &[]);

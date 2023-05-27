@@ -1,5 +1,7 @@
 use std::mem::size_of;
+use common::GameState;
 use wgpu::*;
+use wgpu::util::DeviceExt;
 
 mod blit_to_backbuffer;
 mod compute_system;
@@ -39,6 +41,10 @@ pub struct Renderer
 
     render_target_texture_view: TextureView,
 
+    render_target_depth_texture: Texture,
+    render_target_depth_texture_view: TextureView,
+    render_target_depth_texture_sampler: Sampler,
+
     compute_system: compute_system::TriangleSystem,
     compute_system_copy_vertices: compute_system_copy_vertices::TriangleSystem,
 
@@ -62,12 +68,51 @@ pub struct Renderer
 }
 
 impl Renderer
-{
-    fn create_buffers(&self, game_state: &common::GameState) -> (
-        Buffer, Buffer, Buffer, Buffer, Buffer, Buffer
+{ 
+    fn create_depth_texture(device: &Device, config: &wgpu::SurfaceConfiguration) -> 
+        (Texture, TextureView, Sampler)
+    {
+
+        let texture = Self::create_rendertarget_texture(
+            &device,
+            config.width,
+            config.height,
+            TextureFormat::Depth32Float,
+            TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::TEXTURE_BINDING
+        );
+
+
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let sampler = device.create_sampler( &wgpu::SamplerDescriptor{
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear ,
+            
+            mipmap_filter: wgpu::FilterMode::Nearest,
+
+            compare: Some(wgpu::CompareFunction::LessEqual),
+
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 100.0,
+
+            ..Default::default()
+        });
+
+        return (texture, view, sampler)
+
+    }
+
+
+    fn create_buffers(device: &Device, game_state: &common::GameState) -> (
+        Buffer, Buffer, Buffer, Buffer, Buffer, Buffer, Buffer
     )
     {
-        let gpu_frame_vertices = self.device.create_buffer(
+        let gpu_frame_vertices = device.create_buffer(
             &wgpu::BufferDescriptor {
                 label: Some("Vertex Buffer gpu copy"),
                 size: (size_of::<common::MeshVertex>() * 1_000_000) as BufferAddress,
@@ -76,72 +121,69 @@ impl Renderer
             }
         );
 
-        let gpu_frame_indices = self.device.create_buffer(
+        let gpu_frame_indices = device.create_buffer(
             &wgpu::BufferDescriptor {
                 label: Some("Index Buffer gpu copy"),
-                size: (size_of::<u32> * 1_000_000) as BufferAddress,
+                size: (size_of::<u32>() * 1_000_000) as BufferAddress,
                 usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }
         );
 
-        let gpu_frame_instance_data = self.device.create_buffer(
+        let gpu_frame_instance_data = device.create_buffer(
             &wgpu::BufferDescriptor {
                 label: Some("Instance Buffer gpu copy"),
-                size: (size_of::<u32> * 8 * 256) as BufferAddress,
+                size: (size_of::<u32>() * 8 * 256) as BufferAddress,
                 usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }
         );
 
-
-        let gpu_frame_instance_data = self.device.create_buffer(
-            &wgpu::BufferDescriptor {
-                label: Some("Instance frame model data"),
-                size: (size_of::<common::MeshModelLocation> * 1024 * 1024) as BufferAddress,
-                usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
-                mapped_at_creation: false,
-            }
-        );
-
-//        frame_instance_model_data: Buffer,
-//        frame_instance_model_transforms: Buffer,
-//
-//        model_mesh_vertices: Buffer,
-//        model_mesh_indices: Buffer,
-
-        let model_mesh_vertices = self.device.create_buffer_init(
+        let model_mesh_vertices = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer all"),
-                contents: bytemuck::cast_slice(&[&game_state.mesh_data.vertices]),
+                contents: unsafe { game_state.mesh_data.vertices.align_to::<u8>().1 },
                 usage: wgpu::BufferUsages::STORAGE,
             }
         );
 
-        let model_mesh_indices = self.device.create_buffer_init(
+        let model_mesh_indices = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Index Buffer all"),
-                contents: bytemuck::cast_slice(&[&game_state.mesh_data.indices]),
+                contents: unsafe { game_state.mesh_data.indices.align_to::<u8>().1 },
                 usage: wgpu::BufferUsages::STORAGE,
             }
         );
 
-        let frame_instance_model_data = self.device.create_buffer(
+        let frame_instance_model_data = device.create_buffer(
             &wgpu::BufferDescriptor {
                 label: Some("Instance model data"),
-                size: (size_of::<common::MeshModelLocation> * 1024 * 1024) as BufferAddress,
+                size: (size_of::<common::MeshModelLocation>() * 1024 * 1024) as BufferAddress,
                 usage: wgpu::BufferUsages::MAP_WRITE, // | wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: true,
             }
         );
-        let frame_instance_model_transforms = self.device.create_buffer(
+        let frame_instance_model_transforms = device.create_buffer(
             &wgpu::BufferDescriptor {
                 label: Some("Frame instance model transforms"),
-                size: (size_of::<common::GpuOutInstanceMatrices> * 1024 * 1024) as BufferAddress,
+                size: (size_of::<common::GpuOutInstanceMatrices>() * 1024 * 1024) as BufferAddress,
                 usage: wgpu::BufferUsages::MAP_WRITE, // | wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: true,
             }
         );
+
+        (
+            model_mesh_vertices,
+            model_mesh_indices,
+        
+            frame_instance_model_data,
+            frame_instance_model_transforms,
+        
+            gpu_frame_vertices,
+            gpu_frame_indices,
+            gpu_frame_instance_data,
+        
+        )
 
     }
 
@@ -202,8 +244,23 @@ impl Renderer
 
         return (render_target_texture, render_target_texture2,render_target_texture_view);
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
     pub async fn new<W: raw_window_handle::HasRawWindowHandle + raw_window_handle::HasRawDisplayHandle>
-        (window: &W, width: u32, height: u32) -> Self
+        (window: &W, width: u32, height: u32, game_state: &GameState) -> Self
     {
 
         let instance = wgpu::Instance::default(); //new(wgpu::Backends::all());
@@ -257,6 +314,23 @@ impl Renderer
         let (render_target_texture, render_target_texture2, render_target_texture_view) =
             Self::create_render_target_textures(&device, width, height);
 
+
+        let (render_target_depth_texture, render_target_depth_texture_view, render_target_depth_texture_sampler) =
+            Self::create_depth_texture(&device, &config);
+
+        let (
+                model_mesh_vertices,
+                model_mesh_indices,
+            
+                frame_instance_model_data,
+                frame_instance_model_transforms,
+            
+                gpu_frame_vertices,
+                gpu_frame_indices,
+                gpu_frame_instance_data,
+            ) = Self::create_buffers(&device, &game_state);
+
+
         let triangle_system =
             triangle_system::TriangleSystem::new(
                 &device,
@@ -269,7 +343,8 @@ impl Renderer
         let triangle_system_camera_vertices =
         triangle_system_camera_vertices::TriangleSystem::new(
             &device,
-            render_target_texture.format());
+            render_target_texture.format(),
+            render_target_depth_texture.format());
 
 
         let compute_system = compute_system::TriangleSystem::new(
@@ -314,6 +389,10 @@ impl Renderer
 
             render_target_texture_view,
 
+            render_target_depth_texture,
+            render_target_depth_texture_view,
+            render_target_depth_texture_sampler,
+
             compute_system,
             compute_system_copy_vertices,
             
@@ -322,6 +401,18 @@ impl Renderer
             triangle_system_camera_vertices,
 
             blit_to_backbuffer,
+
+
+
+            model_mesh_vertices,
+            model_mesh_indices,
+        
+            frame_instance_model_data,
+            frame_instance_model_transforms,
+        
+            gpu_frame_vertices,
+            gpu_frame_indices,
+            gpu_frame_instance_data,
         }
     }
 
@@ -343,7 +434,10 @@ impl Renderer
 
         self.triangle_system.render(&mut encoder, &self.render_target_texture_view);
         self.triangle_system_vertices.render(&mut encoder, &self.render_target_texture_view);
-        self.triangle_system_camera_vertices.render(&mut encoder, &self.render_target_texture_view);
+        self.triangle_system_camera_vertices.render(
+            &mut encoder,
+            &self.render_target_texture_view,
+            &self.render_target_depth_texture_view);
         self.compute_system.render(&mut encoder, &self.render_target_texture_view);
 
         self.blit_to_backbuffer.render(&mut encoder, &back_buffer_view);
@@ -392,6 +486,9 @@ impl Renderer
         let (render_target_texture, render_target_texture2, render_target_texture_view) =
             Self::create_render_target_textures(&self.device, width, height);
 
+        let (render_target_depth_texture, render_target_depth_texture_view, render_target_depth_texture_sampler) =
+            Self::create_depth_texture(&self.device, &self.config);
+
 
         self.compute_system.rebind_textures(
             &self.device,
@@ -402,10 +499,14 @@ impl Renderer
             &self.device,
             &render_target_texture2,
         );
-
         self.render_target_texture = render_target_texture;
         self.render_target_texture2 = render_target_texture2;
         self.render_target_texture_view = render_target_texture_view;
+
+        self.render_target_depth_texture = render_target_depth_texture;
+        self.render_target_depth_texture_view = render_target_depth_texture_view;
+        self.render_target_depth_texture_sampler = render_target_depth_texture_sampler;
+
     }
 }
 

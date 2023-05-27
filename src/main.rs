@@ -125,7 +125,7 @@ async fn run()
     let size = window.inner_size();
     println!("window size: {}, {}", size.width, size.height);
     let mut renderer =
-        renderer::Renderer::new(&window, size.width, size.height).await;
+        renderer::Renderer::new(&window, size.width, size.height, &game_state).await;
     let mut now = std::time::Instant::now();
     event_loop.run(move |event, _, control_flow| {
 

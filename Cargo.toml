@@ -17,6 +17,7 @@ opt-level = 1
 common = { path = "libs/common" }
 input = { path = "libs/input" }
 renderer = { path = "libs/renderer" }
+mesh_loader = { path = "libs/mesh_loader" }
 #window = { path = "libs/window" }
 
 env_logger =  { version = "0.10", default-features=false, features=["humantime"] }

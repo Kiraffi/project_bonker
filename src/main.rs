@@ -105,6 +105,11 @@ async fn run()
     let mut game_state =
         common::GameState::new(size.width as f32, size.height as f32);
 
+    // Init only:
+    let _mesh_loader = mesh_loader::MeshLoader::new(&mut game_state);
+
+
+    // Updateable systems.
     let mut systems: Vec<Box<dyn common::System>> = Vec::new();
 
     systems.push(Box::new(CameraSystem{}));

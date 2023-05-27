@@ -1,8 +1,9 @@
-
+use std::mem::size_of;
 use wgpu::*;
 
 mod blit_to_backbuffer;
 mod compute_system;
+mod compute_system_copy_vertices;
 mod triangle_system;
 mod triangle_system_vertices;
 mod triangle_system_camera_vertices;
@@ -18,7 +19,6 @@ impl<P> PhysicalSize<P> {
         PhysicalSize { width, height }
     }
 }
-
 
 pub struct Renderer
 {
@@ -40,17 +40,111 @@ pub struct Renderer
     render_target_texture_view: TextureView,
 
     compute_system: compute_system::TriangleSystem,
-
+    compute_system_copy_vertices: compute_system_copy_vertices::TriangleSystem,
 
     triangle_system: triangle_system::TriangleSystem,
     triangle_system_vertices: triangle_system_vertices::TriangleSystem,
     triangle_system_camera_vertices: triangle_system_camera_vertices::TriangleSystem,
 
     blit_to_backbuffer: blit_to_backbuffer::TriangleSystem,
+
+
+
+    model_mesh_vertices: Buffer,
+    model_mesh_indices: Buffer,
+
+    frame_instance_model_data: Buffer,
+    frame_instance_model_transforms: Buffer,
+
+    gpu_frame_vertices: Buffer,
+    gpu_frame_indices: Buffer,
+    gpu_frame_instance_data: Buffer,
 }
 
 impl Renderer
 {
+    fn create_buffers(&self, game_state: &common::GameState) -> (
+        Buffer, Buffer, Buffer, Buffer, Buffer, Buffer
+    )
+    {
+        let gpu_frame_vertices = self.device.create_buffer(
+            &wgpu::BufferDescriptor {
+                label: Some("Vertex Buffer gpu copy"),
+                size: (size_of::<common::MeshVertex>() * 1_000_000) as BufferAddress,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            }
+        );
+
+        let gpu_frame_indices = self.device.create_buffer(
+            &wgpu::BufferDescriptor {
+                label: Some("Index Buffer gpu copy"),
+                size: (size_of::<u32> * 1_000_000) as BufferAddress,
+                usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            }
+        );
+
+        let gpu_frame_instance_data = self.device.create_buffer(
+            &wgpu::BufferDescriptor {
+                label: Some("Instance Buffer gpu copy"),
+                size: (size_of::<u32> * 8 * 256) as BufferAddress,
+                usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            }
+        );
+
+
+        let gpu_frame_instance_data = self.device.create_buffer(
+            &wgpu::BufferDescriptor {
+                label: Some("Instance frame model data"),
+                size: (size_of::<common::MeshModelLocation> * 1024 * 1024) as BufferAddress,
+                usage: wgpu::BufferUsages::INDIRECT | wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            }
+        );
+
+//        frame_instance_model_data: Buffer,
+//        frame_instance_model_transforms: Buffer,
+//
+//        model_mesh_vertices: Buffer,
+//        model_mesh_indices: Buffer,
+
+        let model_mesh_vertices = self.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer all"),
+                contents: bytemuck::cast_slice(&[&game_state.mesh_data.vertices]),
+                usage: wgpu::BufferUsages::STORAGE,
+            }
+        );
+
+        let model_mesh_indices = self.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Index Buffer all"),
+                contents: bytemuck::cast_slice(&[&game_state.mesh_data.indices]),
+                usage: wgpu::BufferUsages::STORAGE,
+            }
+        );
+
+        let frame_instance_model_data = self.device.create_buffer(
+            &wgpu::BufferDescriptor {
+                label: Some("Instance model data"),
+                size: (size_of::<common::MeshModelLocation> * 1024 * 1024) as BufferAddress,
+                usage: wgpu::BufferUsages::MAP_WRITE, // | wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: true,
+            }
+        );
+        let frame_instance_model_transforms = self.device.create_buffer(
+            &wgpu::BufferDescriptor {
+                label: Some("Frame instance model transforms"),
+                size: (size_of::<common::GpuOutInstanceMatrices> * 1024 * 1024) as BufferAddress,
+                usage: wgpu::BufferUsages::MAP_WRITE, // | wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: true,
+            }
+        );
+
+    }
+
     fn create_rendertarget_texture(
         device: &Device,
         w: u32,
@@ -184,11 +278,23 @@ impl Renderer
             &render_target_texture2,
         );
 
+        let compute_system_copy_vertices = compute_system_copy_vertices::TriangleSystem::new(
+            &device,
+            &render_target_texture,
+            &render_target_texture2,
+        );
+
         let blit_to_backbuffer = blit_to_backbuffer::TriangleSystem::new(
             &device,
             swapchain_format,
             &render_target_texture2
         );
+
+
+
+
+
+
         Self {
             width,
             height,
@@ -209,7 +315,8 @@ impl Renderer
             render_target_texture_view,
 
             compute_system,
-
+            compute_system_copy_vertices,
+            
             triangle_system,
             triangle_system_vertices,
             triangle_system_camera_vertices,

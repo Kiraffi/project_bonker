@@ -45,9 +45,11 @@ pub struct TriangleSystem
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]struct Vertex
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex
 {
     position: [f32; 4],
+    normal: [f32; 4],
     color: [f32; 4],
 }
 // lib.rs
@@ -66,24 +68,51 @@ impl Vertex
                 },
                 wgpu::VertexAttribute {
                     offset: std::mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: (std::mem::size_of::<[f32; 4]>() * 2) as wgpu::BufferAddress,
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float32x4,
-                }
+                },
             ]
         }
     }
 }
+const WHITE_COLOR: [f32; 4] = [1.0f32, 1.0f32, 1.0f32, 1.0f32];
 
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.5, -0.5, 0.5, 1.0], color: [0.0, 0.8, 0.8, 1.0] },
-    Vertex { position: [-0.5,  0.5, 0.5, 1.0], color: [0.8, 0.8, 0.8, 1.0] },
-    Vertex { position: [ 0.5,  0.5, 0.5, 1.0], color: [0.8, 0.8, 0.8, 1.0] },
-    Vertex { position: [ 0.5, -0.5, 0.5, 1.0], color: [0.8, 0.8, 0.8, 1.0] },
+    Vertex { position: [-0.5, -0.5, 0.5, 1.0], normal: [0.0, 0.0, 1.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [-0.5,  0.5, 0.5, 1.0], normal: [0.0, 0.0, 1.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [ 0.5,  0.5, 0.5, 1.0], normal: [0.0, 0.0, 1.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [ 0.5, -0.5, 0.5, 1.0], normal: [0.0, 0.0, 1.0, 0.0], color: WHITE_COLOR },
 
-    Vertex { position: [ 0.5, -0.5, -0.5, 1.0], color: [0.8, 0.8, 0.8, 1.0] },
-    Vertex { position: [ 0.5,  0.5, -0.5, 1.0], color: [0.8, 0.0, 0.8, 1.0] },
-    Vertex { position: [-0.5,  0.5, -0.5, 1.0], color: [0.8, 0.8, 0.8, 1.0] },
-    Vertex { position: [-0.5, -0.5, -0.5, 1.0], color: [0.8, 0.8, 0.8, 1.0] },
+    Vertex { position: [ 0.5, -0.5, -0.5, 1.0], normal: [0.0, 0.0, -1.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [ 0.5,  0.5, -0.5, 1.0], normal: [0.0, 0.0, -1.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [-0.5,  0.5, -0.5, 1.0], normal: [0.0, 0.0, -1.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [-0.5, -0.5, -0.5, 1.0], normal: [0.0, 0.0, -1.0, 0.0], color: WHITE_COLOR },
+
+    Vertex { position: [-0.5, -0.5, -0.5, 1.0], normal: [-1.0, 0.0, 0.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [-0.5,  0.5, -0.5, 1.0], normal: [-1.0, 0.0, 0.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [-0.5,  0.5,  0.5, 1.0], normal: [-1.0, 0.0, 0.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [-0.5, -0.5,  0.5, 1.0], normal: [-1.0, 0.0, 0.0, 0.0], color: WHITE_COLOR },
+
+    Vertex { position: [0.5, -0.5,  0.5, 1.0], normal: [1.0, 0.0, 0.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [0.5,  0.5,  0.5, 1.0], normal: [1.0, 0.0, 0.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [0.5,  0.5, -0.5, 1.0], normal: [1.0, 0.0, 0.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [0.5, -0.5, -0.5, 1.0], normal: [1.0, 0.0, 0.0, 0.0], color: WHITE_COLOR },
+
+    Vertex { position: [-0.5,  0.5,  0.5, 1.0], normal: [0.0, 1.0, 0.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [-0.5,  0.5, -0.5, 1.0], normal: [0.0, 1.0, 0.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [ 0.5,  0.5, -0.5, 1.0], normal: [0.0, 1.0, 0.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [ 0.5,  0.5,  0.5, 1.0], normal: [0.0, 1.0, 0.0, 0.0], color: WHITE_COLOR },
+
+
+    Vertex { position: [ 0.5, -0.5, -0.5, 1.0], normal: [0.0, -1.0, 0.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [ 0.5, -0.5, 0.5, 1.0], normal: [0.0, -1.0, 0.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [-0.5, -0.5, 0.5, 1.0], normal: [0.0, -1.0, 0.0, 0.0], color: WHITE_COLOR },
+    Vertex { position: [-0.5, -0.5, -0.5, 1.0], normal: [0.0, -1.0, 0.0, 0.0], color: WHITE_COLOR },
 ];
 
 const INDICES: &[u16] = &[
@@ -93,17 +122,28 @@ const INDICES: &[u16] = &[
     4, 5, 6,
     6, 4, 7,
 
-    3, 2, 5,
-    5, 4, 3,
+    8, 9, 10,
+    10, 8, 11,
 
-    7, 6, 1,
-    1, 0, 7,
+    12, 13, 14,
+    14, 12, 15,
 
-    1, 6, 5,
-    5, 2, 1,
+    16, 17, 18,
+    18, 16, 19,
 
-    7, 0, 3,
-    3, 4, 7,
+    20, 21, 22,
+    22, 20, 23,
+//    3, 2, 5,
+//    5, 4, 3,
+//
+//    7, 6, 1,
+//    1, 0, 7,
+//
+//    1, 6, 5,
+//    5, 2, 1,
+//
+//    7, 0, 3,
+//    3, 4, 7,
 ];
 
 

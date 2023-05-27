@@ -4,18 +4,92 @@ pub trait System
     fn post_update(&mut self, _dt: f64, _game_state: &mut GameState) {}
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct MeshModelLocation
+{
+    pub vertices_start_index: u32,
+    pub vertices_count: u32,
+    pub indices_start_index: u32,
+    pub indices_count: u32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct MeshVertex
+{
+    pub position: [f32; 4],
+    pub normal: [f32; 4],
+    pub color: [f32; 4],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct GpuOutInstanceMatrices
+{
+    pub v0: [f32; 4],
+    pub v1: [f32; 4],
+    pub v2: [f32; 4],
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+pub struct MeshData
+{
+    pub models: Vec<MeshModelLocation>,
+    pub vertices: Vec<MeshVertex>,
+    pub indices: Vec<u32>,
+
+    pub gpu_out_instance_matrices: Vec<GpuOutInstanceMatrices>,
+    pub gpu_out_instance_mesh_model_locations: Vec<MeshModelLocation>,
+}
+
+impl MeshData
+{
+    fn new() -> Self
+    {
+        Self
+        {
+            models: Vec::with_capacity(1024),
+            vertices: Vec::with_capacity(1024 * 1024),
+            indices: Vec::with_capacity(1024 * 1024),
+
+            gpu_out_instance_matrices: Vec::with_capacity(1024 * 1024),
+            gpu_out_instance_mesh_model_locations: Vec::with_capacity(1024 * 1024),
+        }
+    }
+}
+
+
 
 pub struct GameState
 {
     pub input: input::Input,
     pub scene: Scene,
+
+    pub mesh_data: MeshData,
 }
 
 impl GameState
 {
     pub fn new(width: f32, height: f32) -> Self
     {
-        Self { input: input::Input::new(), scene: Scene::new(width, height) }
+        Self {
+            input: input::Input::new(),
+            scene: Scene::new(width, height),
+            mesh_data: MeshData::new(),
+        }
     }
 }
 
@@ -67,6 +141,7 @@ impl Scene
     }
 }
 
+
 pub struct Camera
 {
     pub eye: glam::Vec3,
@@ -87,7 +162,6 @@ pub const OPENGL_TO_WGPU_MATRIX: glam::Mat4 = glam::mat4(
     glam::Vec4::new(0.0, 0.0, 0.5, 0.0),
     glam::Vec4::new(0.0, 0.0, 0.5, 1.0),
 );
-
 
 
 

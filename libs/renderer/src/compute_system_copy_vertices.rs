@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::num::NonZeroU32;
 
 use wgpu::*;
+use wgpu::BindingResource::Buffer;
 
 pub struct TriangleSystem
 {
@@ -9,16 +10,14 @@ pub struct TriangleSystem
     _bind_group_layout: BindGroupLayout,
     _pipeline_layout: PipelineLayout,
     compute_pipeline: ComputePipeline,
+    compute_pipeline_reset: ComputePipeline,
     bind_group: BindGroup,
-
-    _input_view: TextureView,
-    _output_view: TextureView,
 
     texture_width: u32,
     texture_height: u32,
 
-    index_buffer: Buffer,
-    vertex_buffer: Buffer,
+    index_buffer: wgpu::Buffer,
+    vertex_buffer: wgpu::Buffer,
 }
 
 #[repr(C)]
@@ -43,50 +42,8 @@ impl TriangleSystem
         let _shader = device.create_shader_module(wgpu::ShaderModuleDescriptor
         {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../../../data/shaders/compute.wgsl"))),
-        });
-
-        let _bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Compute bindings"),
-            entries: &[
-                // Input
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                // Output
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        format: wgpu::TextureFormat::Rgba8Unorm,
-                        access: wgpu::StorageTextureAccess::WriteOnly,
-                    },
-                    count: None,
-                },
-            ],
-        });
-
-        let _pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor
-        {
-            label: None,
-            bind_group_layouts: &[&_bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        // Instantiates the pipeline.
-        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: Some(&_pipeline_layout),
-            module: &_shader,
-            entry_point: "main",
+            source: wgpu::ShaderSource::Wgsl(
+                Cow::Borrowed(include_str!("../../../data/shaders/compute_copy_vertices.wgsl"))),
         });
 
         let index_buffer = device.create_buffer(
@@ -107,13 +64,70 @@ impl TriangleSystem
             }
         );
 
+        let _bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Compute bindings"),
+            entries: &[
+                // Input
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                // Output
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
 
-        let (bind_group, _input_view, _output_view) =
+        let _pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor
+        {
+            label: None,
+            bind_group_layouts: &[&_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        // Instantiates the pipeline.
+        let compute_pipeline = device.create_compute_pipeline(
+            &wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&_pipeline_layout),
+                module: &_shader,
+                entry_point: "main",
+            }
+        );
+        // Instantiates the pipeline.
+        let compute_pipeline_reset = device.create_compute_pipeline(
+            &wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&_pipeline_layout),
+                module: &_shader,
+                entry_point: "main_reset",
+            }
+        );
+
+
+
+
+
+        let bind_group =
             Self::create_bind_group(
                 &device,
                 &_bind_group_layout,
-                &input_texture,
-                &output_texture,
+                &index_buffer,
+                &vertex_buffer,
             );
 
 
@@ -123,10 +137,8 @@ impl TriangleSystem
             _bind_group_layout,
             _pipeline_layout,
             compute_pipeline,
+            compute_pipeline_reset,
             bind_group,
-
-            _input_view,
-            _output_view,
 
             texture_width: output_texture.width(),
             texture_height: output_texture.height(),
@@ -137,58 +149,49 @@ impl TriangleSystem
     }
     pub fn rebind_textures(&mut self,
        device: &Device,
-       input_texture: &wgpu::Texture,
-       output_texture: &wgpu::Texture
     )
     {
-        let (bind_group, _input_view, _output_view) =
+        let bind_group =
             Self::create_bind_group(
                 &device,
                 &self._bind_group_layout,
-                &input_texture,
-                &output_texture,
+                &self.index_buffer,
+                &self.vertex_buffer,
             );
         self.bind_group = bind_group;
-        self._input_view = _input_view;
-        self._output_view = _output_view;
-        self.texture_width = input_texture.width();
-        self.texture_height = input_texture.height();
     }
-    pub fn render(&mut self, encoder: &mut CommandEncoder, view: &TextureView)
+    pub fn render(&mut self, encoder: &mut CommandEncoder)//, view: &TextureView)
     {
-        let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
-        compute_pass.set_pipeline(&self.compute_pipeline);
-        compute_pass.set_bind_group(0, &self.bind_group, &[]);
-        compute_pass.insert_debug_marker("Compute testing");
-        compute_pass.dispatch_workgroups(
-            (self.texture_width + 7) / 8,
-            (self.texture_height + 7) / 8,
-            1
-        );
+        {
+            let mut compute_pass1 = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
+            compute_pass1.set_bind_group(0, &self.bind_group, &[]);
+            compute_pass1.insert_debug_marker("Compute reset");
+            compute_pass1.set_pipeline(&self.compute_pipeline_reset);
+            compute_pass1.dispatch_workgroups(1, 1, 1);
+        }
+        {
+            let mut compute_pass2 = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None });
+            compute_pass2.set_pipeline(&self.compute_pipeline);
+            compute_pass2.set_bind_group(0, &self.bind_group, &[]);
+            compute_pass2.insert_debug_marker("Compute testing");
+            compute_pass2.dispatch_workgroups(
+                (self.texture_width + 7) / 8,
+                (self.texture_height + 7) / 8,
+                1
+            );
+        }
+
     }
 
     fn create_bind_group(
         device: &Device,
         bind_group_layout: &BindGroupLayout,
-        input_texture: &wgpu::Texture,
-        output_texture: &wgpu::Texture
-    ) -> (BindGroup, TextureView, TextureView)
+        input_buffer: &wgpu::Buffer,
+        output_buffer: &wgpu::Buffer
+    ) -> BindGroup
     {
-        let _input_view = input_texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some(&format!("My compute texture view")),
-            format: Some(input_texture.format()),
-            base_mip_level: 0,
-            mip_level_count: Some(NonZeroU32::try_from(1u32).unwrap().into()),
-            ..Default::default()
-        });
-
-        let _output_view = output_texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some(&format!("My compute texture view")),
-            format: Some(output_texture.format()),
-            base_mip_level: 0,
-            mip_level_count: Some(NonZeroU32::try_from(1u32).unwrap().into()),
-            ..Default::default()
-        });
+        let _input_view = input_buffer.as_entire_binding();
+        let _output_view = output_buffer.as_entire_binding();
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("My compute Bind Group"),
@@ -197,15 +200,15 @@ impl TriangleSystem
                 // Input
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&_input_view),
+                    resource: _input_view,
                 },
                 // Output
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&_output_view),
+                    resource: _output_view,
                 },
             ],
         });
-        return (bind_group, _input_view, _output_view);
+        return bind_group;
     }
 }

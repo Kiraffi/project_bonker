@@ -52,6 +52,7 @@ pub struct Renderer
     triangle_system_vertices: triangle_system_vertices::TriangleSystem,
     triangle_system_camera_vertices: triangle_system_camera_vertices::TriangleSystem,
 
+
     blit_to_backbuffer: blit_to_backbuffer::TriangleSystem,
 
 
@@ -439,7 +440,7 @@ impl Renderer
             &self.render_target_texture_view,
             &self.render_target_depth_texture_view);
         self.compute_system.render(&mut encoder, &self.render_target_texture_view);
-
+        self.compute_system_copy_vertices.render(&mut encoder);
         self.blit_to_backbuffer.render(&mut encoder, &back_buffer_view);
         /*
         encoder.copy_texture_to_texture(

@@ -175,8 +175,10 @@ impl TriangleSystem
             compute_pass2.set_bind_group(0, &self.bind_group, &[]);
             compute_pass2.insert_debug_marker("Compute testing");
             compute_pass2.dispatch_workgroups(
-                (self.texture_width + 7) / 8,
-                (self.texture_height + 7) / 8,
+                (self.texture_width * self.texture_height + 63) / 64,
+//                (self.texture_width + 7) / 8,
+//                (self.texture_height + 7) / 8,
+                1,
                 1
             );
         }
